@@ -1025,7 +1025,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                              new Node<K,V>(hash, key, value, null)))
                     break;                   // no lock when adding to empty bin
             }
-            // TODO 结合扩容
+            // TODO 结合扩容, 当前节点hash值 = Moved, 正在扩容-帮助扩容
             else if ((fh = f.hash) == MOVED)
                 tab = helpTransfer(tab, f);
             else {
@@ -2305,6 +2305,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                         transferIndex <= 0)
                         break;
                     if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1))
+                        // 扩容
                         transfer(tab, nt);
                 }
                 else if (U.compareAndSwapInt(this, SIZECTL, sc,
@@ -2384,6 +2385,13 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
         }
     }
 
+    public static void main(String[] args) {
+        ConcurrentHashMap map = new ConcurrentHashMap(2);
+        map.put(1, 1);
+        map.put(2, 2);
+        map.put(3, 3);
+    }
+
     /**
      * Moves and/or copies the nodes in each bin to new table. See
      * above for explanation.
@@ -2442,6 +2450,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                     i = n; // recheck before commit
                 }
             }
+            // 如果对应位置还为空, 使用ForwardingNode 占位, 其他线程能够识别正在扩容, 并且帮助扩容
             else if ((f = tabAt(tab, i)) == null)
                 advance = casTabAt(tab, i, null, fwd);
             else if ((fh = f.hash) == MOVED)
@@ -2453,13 +2462,30 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                         if (fh >= 0) {
                             int runBit = fh & n;
                             Node<K,V> lastRun = f;
+                            // 遍历这个Node 链表进行内部数据迁移
                             for (Node<K,V> p = f.next; p != null; p = p.next) {
+                                /*
+                                 * 和putVal()计算下标时有所不同, 它并没有将 n(length) - 1进行计算
+                                 * 这里是个非常巧妙的算法, 这种运算 如果节点需要迁移, 那么 b 必然 != 0
+                                 * 反之, 不需要迁移的节点与其进行按位与一定是0
+                                 * 例如:
+                                 * 4 = 0000 0100. 大小为4的hash表中 下标为 3的Node 中由 hash为 3 7 11 的值.
+                                 * 3 = 0000 0011
+                                 * 7 = 0000 0110
+                                 * 11 = 0000 1011
+                                 * 计算下标时的 - 1 则会掩盖掉原来的最高位. 这种机制也能保证计算的下标散列并且不会越界.
+                                 * 而这里采用直接 & 运算, 在(扩容前大小 - 扩容后大小 - 1)区间的值都是需要迁移的.
+                                 * 因为在位运算中, 这个区间的值在扩容后的掩码范围内 都会和这个扩容前的最高位相交.
+                                 * 两倍扩容则 8 = 0000 1000,
+                                 */
                                 int b = p.hash & n;
+                                // bit 位和当前不能. 以当前节点的值继续后续便利
                                 if (b != runBit) {
                                     runBit = b;
                                     lastRun = p;
                                 }
                             }
+                            // 为0 代表不需要迁移的.
                             if (runBit == 0) {
                                 ln = lastRun;
                                 hn = null;
@@ -2468,15 +2494,19 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                                 hn = lastRun;
                                 ln = null;
                             }
+                            // 遍历到最后一个需要迁移的节点为止.
                             for (Node<K,V> p = f; p != lastRun; p = p.next) {
                                 int ph = p.hash; K pk = p.key; V pv = p.val;
+                                // 采用尾插. 这里构建Node的末尾参数则是next.
                                 if ((ph & n) == 0)
                                     ln = new Node<K,V>(ph, pk, pv, ln);
                                 else
                                     hn = new Node<K,V>(ph, pk, pv, hn);
                             }
+                            // 迁移.
                             setTabAt(nextTab, i, ln);
                             setTabAt(nextTab, i + n, hn);
+                            // 使用ForwardingNode 占位 table 对应位置, 表示这个节点已被迁移.
                             setTabAt(tab, i, fwd);
                             advance = true;
                         }
