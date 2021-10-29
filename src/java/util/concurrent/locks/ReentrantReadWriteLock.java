@@ -263,7 +263,11 @@ public class ReentrantReadWriteLock
         static final int SHARED_UNIT    = (1 << SHARED_SHIFT);
         static final int MAX_COUNT      = (1 << SHARED_SHIFT) - 1;
         static final int EXCLUSIVE_MASK = (1 << SHARED_SHIFT) - 1;
-
+        /**
+         * 这里的C 一般则是CAS中的state,
+         * 读写锁这里采用高 16位存储共享锁的持有数量.
+         * 低16位则存储互斥锁的数量
+         */
         /** Returns the number of shared holds represented in count  */
         static int sharedCount(int c)    { return c >>> SHARED_SHIFT; }
         /** Returns the number of exclusive holds represented in count  */
@@ -463,10 +467,12 @@ public class ReentrantReadWriteLock
              */
             Thread current = Thread.currentThread();
             int c = getState();
+            // 判断独占锁count. != 0 代表有写锁存在 并且还会判断是否为当前线程(如果写锁为当前线程可以降级为读锁).
             if (exclusiveCount(c) != 0 &&
                 getExclusiveOwnerThread() != current)
                 return -1;
             int r = sharedCount(c);
+            // 判断这个读锁是否需要被阻塞(根据公平和非公平有所不同, 默认非公平则是判断阻塞队列中头部是否有写锁的线程在等待. 有则读锁需要阻塞)
             if (!readerShouldBlock() &&
                 r < MAX_COUNT &&
                 compareAndSetState(c, c + SHARED_UNIT)) {

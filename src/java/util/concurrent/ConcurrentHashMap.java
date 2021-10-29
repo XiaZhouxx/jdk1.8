@@ -2403,6 +2403,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
         if (nextTab == null) {            // initiating
             try {
                 @SuppressWarnings("unchecked")
+                // 两倍扩容.
                 Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n << 1];
                 nextTab = nt;
             } catch (Throwable ex) {      // try to cope with OOME
@@ -2413,11 +2414,13 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
             transferIndex = n;
         }
         int nextn = nextTab.length;
+        // 转发Node. 表示oldTab的元素已被扩容迁移.
         ForwardingNode<K,V> fwd = new ForwardingNode<K,V>(nextTab);
         boolean advance = true;
         boolean finishing = false; // to ensure sweep before committing nextTab
         for (int i = 0, bound = 0;;) {
             Node<K,V> f; int fh;
+            // 还需要深入. 目前只看出是得出迁移下标. 一般情况就是 oldTab.length - 1 进行倒序遍历迁移原节点
             while (advance) {
                 int nextIndex, nextBound;
                 if (--i >= bound || finishing)

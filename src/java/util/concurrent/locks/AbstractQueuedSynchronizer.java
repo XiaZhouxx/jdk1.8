@@ -952,7 +952,9 @@ public abstract class AbstractQueuedSynchronizer
             boolean interrupted = false;
             for (;;) {
                 final Node p = node.predecessor();
+                // 如果前置节点是head节点. 那么可以再次尝试获取锁. 可以看出进入阻塞队列中的线程都会是公平的竞争锁
                 if (p == head) {
+                    // 再次尝试获取锁
                     int r = tryAcquireShared(arg);
                     if (r >= 0) {
                         setHeadAndPropagate(node, r);
@@ -963,6 +965,7 @@ public abstract class AbstractQueuedSynchronizer
                         return;
                     }
                 }
+                // 阻塞线程
                 if (shouldParkAfterFailedAcquire(p, node) &&
                     parkAndCheckInterrupt())
                     interrupted = true;
@@ -1280,6 +1283,7 @@ public abstract class AbstractQueuedSynchronizer
      */
     public final void acquireShared(int arg) {
         if (tryAcquireShared(arg) < 0)
+            // 再次尝试获取锁. 失败则会阻塞进入阻塞队列.
             doAcquireShared(arg);
     }
 

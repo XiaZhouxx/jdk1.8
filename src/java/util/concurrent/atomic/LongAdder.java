@@ -82,12 +82,20 @@ public class LongAdder extends Striped64 implements Serializable {
      * @param x the value to add
      */
     public void add(long x) {
+        /*
+        * 相比AtomicLong的纯粹CAS不同,
+        * 当高并发竞争add() 时, 只使用CAS进行值的累加, 此时只会有一个线程操作成功. 其他并发线程只能
+        * 自旋进行下一次的竞争直到成功.
+        * 而LongAdder将总的 value 拆分为了多个cell 数组, 初次并发时, 当有线程CAS失败, 就会构建出一个Cell数组,
+        * 每个Cell 内部都有一个 value. 此时其他失败的线程就可以选择一个Cell 进行CAS设置值. 提高了并发时的并行度.
+        */
         Cell[] as; long b, v; int m; Cell a;
         if ((as = cells) != null || !casBase(b = base, b + x)) {
             boolean uncontended = true;
             if (as == null || (m = as.length - 1) < 0 ||
                 (a = as[getProbe() & m]) == null ||
                 !(uncontended = a.cas(v = a.value, v + x)))
+                // 初始化Cell数组(默认2)or设置对应下标Cell或者 扩容Cell, 两倍扩容
                 longAccumulate(x, null, uncontended);
         }
     }
