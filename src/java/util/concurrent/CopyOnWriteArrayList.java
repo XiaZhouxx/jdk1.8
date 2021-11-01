@@ -432,6 +432,10 @@ public class CopyOnWriteArrayList<E>
      * @return {@code true} (as specified by {@link Collection#add})
      */
     public boolean add(E e) {
+        /*
+        * 实现原理比较简单, 直接加锁, 复制当前arr 将其len + 1. 基于len 直接赋值即可
+        * 但是需要注意get(index) 方法. 可能会读不到最新的记录
+         */
         final ReentrantLock lock = this.lock;
         lock.lock();
         try {

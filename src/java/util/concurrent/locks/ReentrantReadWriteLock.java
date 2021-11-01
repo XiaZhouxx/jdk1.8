@@ -381,6 +381,11 @@ public class ReentrantReadWriteLock
             return free;
         }
 
+        /**
+         * 尝试获取锁
+         * @param acquires
+         * @return
+         */
         protected final boolean tryAcquire(int acquires) {
             /*
              * Walkthrough:
@@ -395,20 +400,28 @@ public class ReentrantReadWriteLock
              */
             Thread current = Thread.currentThread();
             int c = getState();
+            // 独占锁 count.
             int w = exclusiveCount(c);
             if (c != 0) {
                 // (Note: if c != 0 and w == 0 then shared count != 0)
+                /*
+                * 1. 前置条件 c != 0. 说明当前存在锁.
+                * 2. w == 0, 则说明当前存在的都是读锁, 读写互斥, 且读锁不能升级为写锁.
+                * 3. 第二步 false. 那么此时都是写锁, 判断持有锁的是否为当前线程
+                */
                 if (w == 0 || current != getExclusiveOwnerThread())
                     return false;
                 if (w + exclusiveCount(acquires) > MAX_COUNT)
                     throw new Error("Maximum lock count exceeded");
-                // Reentrant acquire
+                // 锁重入
                 setState(c + acquires);
                 return true;
             }
+            // 判断这个写需要被阻塞 or 设置 state 失败. 则tryAcquire false
             if (writerShouldBlock() ||
                 !compareAndSetState(c, c + acquires))
                 return false;
+            // 持有线程
             setExclusiveOwnerThread(current);
             return true;
         }
@@ -472,7 +485,7 @@ public class ReentrantReadWriteLock
                 getExclusiveOwnerThread() != current)
                 return -1;
             int r = sharedCount(c);
-            // 判断这个读锁是否需要被阻塞(根据公平和非公平有所不同, 默认非公平则是判断阻塞队列中头部是否有写锁的线程在等待. 有则读锁需要阻塞)
+            // 判断这个读锁是否需要被阻塞(根据公平和非公平有所不同, 默认非公平则是判断阻塞队列中头部是否有写锁的线程在等待. 而公平则需要判断阻塞队列是否有等待锁的Node)
             if (!readerShouldBlock() &&
                 r < MAX_COUNT &&
                 compareAndSetState(c, c + SHARED_UNIT)) {
@@ -491,8 +504,10 @@ public class ReentrantReadWriteLock
                 }
                 return 1;
             }
+            // 完整的再次获取共享锁. 冗余的部分代码.
             return fullTryAcquireShared(current);
         }
+
 
         /**
          * Full version of acquire for reads, that handles CAS misses

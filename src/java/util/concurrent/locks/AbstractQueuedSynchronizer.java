@@ -1283,7 +1283,7 @@ public abstract class AbstractQueuedSynchronizer
      */
     public final void acquireShared(int arg) {
         if (tryAcquireShared(arg) < 0)
-            // 再次尝试获取锁. 失败则会阻塞进入阻塞队列.
+            // 加入到阻塞队列中, 自旋再次尝试获取锁. 为获取到阻塞. LockSupport.park().
             doAcquireShared(arg);
     }
 
